@@ -1,24 +1,19 @@
-const fs = require('fs');
-const path = require('path');
+import fetch from 'node-fetch';
 
-const dbFile = path.join(__dirname, '..', 'urls.json');
+const RAW_URL = 'https://raw.githubusercontent.com/codegood21/code/main/urls.json';
 
-let db = {};
-if (fs.existsSync(dbFile)) {
+export default async function handler(req, res) {
+  const { id } = req.query;
+
   try {
-    db = JSON.parse(fs.readFileSync(dbFile));
-  } catch (err) {
-    db = {};
+    const dbRes = await fetch(RAW_URL);
+    const db = await dbRes.json();
+
+    if (!db[id]) return res.status(404).send('Short URL not found');
+
+    res.writeHead(302, { Location: db[id] });
+    res.end();
+  } catch {
+    res.status(500).send('Failed to fetch redirect database');
   }
-}
-
-export default function handler(req, res) {
-  const {
-    query: { id }
-  } = req;
-
-  const target = db[id];
-  if (!target) return res.status(404).send('Short URL not found');
-  res.writeHead(302, { Location: target });
-  res.end();
 }
