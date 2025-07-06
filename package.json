@@ -1,11 +1,14 @@
 {
-  "name": "shorturl-vercel",
+  "name": "shortener-sooty",
   "version": "1.0.0",
-  "description": "Short URL with Vercel Serverless Function",
+  "description": "Short URL service using GitHub as storage, deployed to Vercel",
   "main": "index.js",
   "scripts": {
     "dev": "vercel dev",
     "start": "vercel dev"
   },
-  "dependencies": {}
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  },
+  "license": "MIT"
 }
