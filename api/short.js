@@ -1,9 +1,10 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import fetch from 'node-fetch';
 
 const RAW_URL = 'https://raw.githubusercontent.com/codegood21/code/main/urls.json';
 const API_URL = 'https://api.github.com/repos/codegood21/code/contents/urls.json';
-const GITHUB_TOKEN = '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';
-
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const generateId = (len = 6) => {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
