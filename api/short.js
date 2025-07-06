@@ -2,7 +2,7 @@ import fetch from 'node-fetch';
 
 const RAW_URL = 'https://raw.githubusercontent.com/codegood21/code/main/urls.json';
 const API_URL = 'https://api.github.com/repos/codegood21/code/contents/urls.json';
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_TOKEN = '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';
 
 const generateId = (len = 6) => {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
