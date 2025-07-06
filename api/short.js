@@ -33,7 +33,8 @@ export default function handler(req, res) {
   }
 
   try {
-    const parsed = new URL(url);
+    const decodedUrl = decodeURIComponent(url);
+const parsed = new URL(decodedUrl);
 
     const existing = Object.entries(db).find(([key, val]) => val === parsed.href);
     if (existing) {
