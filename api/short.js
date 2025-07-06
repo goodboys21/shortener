@@ -1,44 +1,30 @@
-const fs = require('fs');
-const path = require('path');
+import fetch from 'node-fetch';
 
-const dbFile = path.join(__dirname, '..', 'urls.json');
+const RAW_URL = 'https://raw.githubusercontent.com/codegood21/code/main/urls.json';
+const API_URL = 'https://api.github.com/repos/codegood21/code/contents/urls.json';
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 
-function generateId(length = 6) {
+const generateId = (len = 6) => {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
+  for (let i = 0; i < len; i++) result += chars[Math.floor(Math.random() * chars.length)];
   return result;
-}
-
-let db = {};
-if (fs.existsSync(dbFile)) {
-  try {
-    db = JSON.parse(fs.readFileSync(dbFile));
-  } catch (err) {
-    db = {};
-  }
-}
-
-const saveDb = () => {
-  fs.writeFileSync(dbFile, JSON.stringify(db, null, 2));
 };
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   const { url } = req.query;
-
-  if (!url) {
-    return res.status(400).json({ error: 'Missing ?url=' });
-  }
+  if (!url) return res.status(400).json({ error: 'Missing ?url=' });
 
   try {
     const decodedUrl = decodeURIComponent(url);
-const parsed = new URL(decodedUrl);
+    const parsed = new URL(decodedUrl);
 
-    const existing = Object.entries(db).find(([key, val]) => val === parsed.href);
+    const dbRes = await fetch(RAW_URL);
+    let db = await dbRes.json();
+
+    const existing = Object.entries(db).find(([_, val]) => val === parsed.href);
     if (existing) {
-      return res.json({ short: `https://cgo.qzz.io/${existing[0]}` });
+      return res.json({ short: `https://shortener-sooty.vercel.app/${existing[0]}` });
     }
 
     let id;
@@ -47,10 +33,38 @@ const parsed = new URL(decodedUrl);
     } while (db[id]);
 
     db[id] = parsed.href;
-    saveDb();
 
-    res.json({ short: `https://cgo.qzz.io/${id}` });
-  } catch {
-    res.status(400).json({ error: 'Invalid URL' });
+    const updatedContent = Buffer.from(JSON.stringify(db, null, 2)).toString('base64');
+
+    const getSha = await fetch(API_URL, {
+      headers: {
+        Authorization: `token ${GITHUB_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const { sha } = await getSha.json();
+
+    const updateRes = await fetch(API_URL, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${GITHUB_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: `add ${id}`,
+        content: updatedContent,
+        sha
+      })
+    });
+
+    if (!updateRes.ok) {
+      const error = await updateRes.text();
+      return res.status(500).json({ error: 'Failed to update GitHub', detail: error });
+    }
+
+    res.json({ short: `https://shortener-sooty.vercel.app/${id}` });
+
+  } catch (e) {
+    return res.status(400).json({ error: 'Invalid URL or GitHub error', detail: e.message });
   }
 }
