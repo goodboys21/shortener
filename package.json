@@ -1,0 +1,11 @@
+{
+  "name": "shorturl-vercel",
+  "version": "1.0.0",
+  "description": "Short URL with Vercel Serverless Function",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev"
+  },
+  "dependencies": {}
+}
