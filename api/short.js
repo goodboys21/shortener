@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
 
-const BIN_URL = 'https://jsonblob.com/api/jsonBlob/1391431496337907712';
+const CONFIG_URL = 'https://files.catbox.moe/k7cs72.json';
+const FILE_PATH = 'shorturl.json';
 
 const generateId = (len = 6) => {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -9,16 +10,64 @@ const generateId = (len = 6) => {
   return result;
 };
 
+async function getConfig() {
+  const res = await fetch(CONFIG_URL);
+  if (!res.ok) throw new Error('Failed to fetch GitHub config from Catbox');
+  return await res.json();
+}
+
+async function getDB({ username, repo, branch }) {
+  const url = `https://raw.githubusercontent.com/${username}/${repo}/${branch}/${FILE_PATH}`;
+  const res = await fetch(url);
+  if (!res.ok) return {}; // jika belum ada file
+  return await res.json();
+}
+
+async function updateDB({ username, repo, token }, newData) {
+  const apiUrl = `https://api.github.com/repos/${username}/${repo}/contents/${FILE_PATH}`;
+
+  // Ambil SHA file lama (jika ada)
+  const getRes = await fetch(apiUrl, {
+    headers: { Authorization: `token ${token}` }
+  });
+
+  let sha;
+  if (getRes.ok) {
+    const getJson = await getRes.json();
+    sha = getJson.sha;
+  }
+
+  const encoded = Buffer.from(JSON.stringify(newData, null, 2)).toString('base64');
+
+  const putRes = await fetch(apiUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `token ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      message: 'Update short links database',
+      content: encoded,
+      sha
+    })
+  });
+
+  if (!putRes.ok) {
+    const text = await putRes.text();
+    throw new Error(`GitHub update failed: ${text}`);
+  }
+}
+
 export default async function handler(req, res) {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'Missing ?url=' });
 
   try {
+    const config = await getConfig();
     const decodedUrl = decodeURIComponent(url);
     const parsed = new URL(decodedUrl);
 
-    const getRes = await fetch(BIN_URL);
-    const db = await getRes.json();
+    const db = await getDB(config);
 
     const existing = Object.entries(db).find(([_, val]) => val === parsed.href);
     if (existing) {
@@ -32,20 +81,10 @@ export default async function handler(req, res) {
 
     db[id] = parsed.href;
 
-    const putRes = await fetch(BIN_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(db, null, 2)
-    });
-
-    if (!putRes.ok) {
-      const text = await putRes.text();
-      return res.status(500).json({ error: 'Failed to update JsonBlob', detail: text });
-    }
+    await updateDB(config, db);
 
     res.json({ short: `https://${req.headers.host}/${id}` });
-
   } catch (err) {
-    res.status(400).json({ error: 'Invalid URL or JSONBlob error', detail: err.message });
+    res.status(400).json({ error: 'Failed to process request', detail: err.message });
   }
-  }
+}
