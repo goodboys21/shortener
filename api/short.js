@@ -19,18 +19,15 @@ async function getConfig() {
 async function getDB({ username, repo, branch }) {
   const url = `https://raw.githubusercontent.com/${username}/${repo}/${branch}/${FILE_PATH}`;
   const res = await fetch(url);
-  if (!res.ok) return {}; // file belum ada → return kosong
+  if (!res.ok) return {};
   return await res.json();
 }
 
 async function updateDB({ username, repo, token }, newData) {
   const apiUrl = `https://api.github.com/repos/${username}/${repo}/contents/${FILE_PATH}`;
-
-  // ambil sha file lama, kalau belum ada maka biarin undefined
   let sha;
-  const getRes = await fetch(apiUrl, {
-    headers: { Authorization: `token ${token}` }
-  });
+
+  const getRes = await fetch(apiUrl, { headers: { Authorization: `token ${token}` } });
   if (getRes.ok) {
     const getJson = await getRes.json();
     sha = getJson.sha;
@@ -53,7 +50,7 @@ async function updateDB({ username, repo, token }, newData) {
 
   if (!putRes.ok) {
     const text = await putRes.text();
-    throw new Error(`GitHub update failed: ${text}`);
+    throw new Error(`update failed: ${text}`);
   }
 }
 
@@ -68,23 +65,34 @@ export default async function handler(req, res) {
 
     const db = await getDB(config);
 
-    // kalau sudah ada URL yang sama
+    // cari apakah sudah pernah disingkat
     const existing = Object.entries(db).find(([_, val]) => val === parsed.href);
+    let id;
     if (existing) {
-      return res.json({ short: `https://${req.headers.host}/${existing[0]}` });
+      id = existing[0];
+    } else {
+      do {
+        id = generateId();
+      } while (db[id]);
+      db[id] = parsed.href;
+      await updateDB(config, db);
     }
 
-    let id;
-    do {
-      id = generateId();
-    } while (db[id]);
+    const shortLink = `https://${req.headers.host}/${id}`;
 
-    db[id] = parsed.href;
+    // buat QR code
+    const qrRes = await fetch(
+      `https://api.baguss.xyz/api/tools/text2qr?text=${encodeURIComponent(shortLink)}`
+    );
+    const qrJson = await qrRes.json().catch(() => null);
+    const qrUrl = qrJson?.url || null;
 
-    await updateDB(config, db);
-
-    res.json({ short: `https://${req.headers.host}/${id}` });
+    res.json({
+      success: true,
+      short: shortLink,
+      qr: qrUrl
+    });
   } catch (err) {
-    res.status(400).json({ error: 'Failed to process request', detail: err.message });
+    res.status(400).json({ success: false, error: err.message });
   }
 }
