@@ -13,12 +13,25 @@ export default async function handler(req, res) {
   const { id } = req.query;
 
   try {
-    const { username, repo, branch } = await getConfig();
-    const url = `https://raw.githubusercontent.com/${username}/${repo}/${branch}/${FILE_PATH}`;
-    const getRes = await fetch(url);
-    const db = await getRes.json();
+    const { username, repo, token } = await getConfig();
+    const apiUrl = `https://api.github.com/repos/${username}/${repo}/contents/${FILE_PATH}`;
 
-    if (!db[id]) return res.status(404).send('Short URL not found');
+    const getRes = await fetch(apiUrl, {
+      headers: { Authorization: `token ${token}` }
+    });
+
+    if (!getRes.ok) {
+      const text = await getRes.text();
+      return res.status(500).send('GitHub API error: ' + text);
+    }
+
+    const file = await getRes.json();
+    const decoded = Buffer.from(file.content, 'base64').toString();
+    const db = JSON.parse(decoded);
+
+    if (!db[id]) {
+      return res.status(404).send(`Short URL not found for id: ${id}`);
+    }
 
     res.writeHead(302, { Location: db[id] });
     res.end();
