@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "description": "Short URL service using GitHub as storage, deployable to Vercel",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "dev": "vercel dev",
-    "start": "vercel dev"
+    "dev": "node index.js",
+    "start": "node index.js"
   },
   "dependencies": {
-    "dotenv": "^16.3.1",
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
     "node-fetch": "^2.6.7"
   },
   "license": "MIT"
