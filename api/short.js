@@ -1,98 +1,65 @@
-import fetch from 'node-fetch';
+import express from "express";
+import fetch from "node-fetch";
+import cors from "cors";
 
-const CONFIG_URL = 'https://files.catbox.moe/k7cs72.json';
-const FILE_PATH = 'shorturl.json';
+const app = express();
+app.use(express.json());
+app.use(cors());
 
-const generateId = (len = 6) => {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < len; i++) result += chars[Math.floor(Math.random() * chars.length)];
-  return result;
-};
-
-async function getConfig() {
-  const res = await fetch(CONFIG_URL);
-  if (!res.ok) throw new Error('Failed to fetch GitHub config from Catbox');
-  return await res.json();
-}
-
-async function getDB({ username, repo, branch }) {
-  const url = `https://raw.githubusercontent.com/${username}/${repo}/${branch}/${FILE_PATH}`;
-  const res = await fetch(url);
-  if (!res.ok) return {};
-  return await res.json();
-}
-
-async function updateDB({ username, repo, token }, newData) {
-  const apiUrl = `https://api.github.com/repos/${username}/${repo}/contents/${FILE_PATH}`;
-  let sha;
-
-  const getRes = await fetch(apiUrl, { headers: { Authorization: `token ${token}` } });
-  if (getRes.ok) {
-    const getJson = await getRes.json();
-    sha = getJson.sha;
-  }
-
-  const encoded = Buffer.from(JSON.stringify(newData, null, 2)).toString('base64');
-
-  const putRes = await fetch(apiUrl, {
-    method: 'PUT',
-    headers: {
-      Authorization: `token ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      message: sha ? 'Update short links database' : 'Create short links database',
-      content: encoded,
-      sha
-    })
-  });
-
-  if (!putRes.ok) {
-    const text = await putRes.text();
-    throw new Error(`update failed: ${text}`);
-  }
-}
-
-export default async function handler(req, res) {
-  const { url } = req.query;
-  if (!url) return res.status(400).json({ error: 'Missing ?url=' });
-
+app.get("/short", async (req, res) => {
   try {
-    const config = await getConfig();
-    const decodedUrl = decodeURIComponent(url);
-    const parsed = new URL(decodedUrl);
+    const { url } = req.query;
+    if (!url) return res.status(400).json({ error: "Missing ?url=" });
 
-    const db = await getDB(config);
+    // Ambil data GitHub dari Catbox
+    const catbox = await fetch("https://files.catbox.moe/k7cs72.json").then(r => r.json());
+    const { token, username, repo, branch } = catbox;
 
-    // cari apakah sudah pernah disingkat
-    const existing = Object.entries(db).find(([_, val]) => val === parsed.href);
-    let id;
-    if (existing) {
-      id = existing[0];
-    } else {
-      do {
-        id = generateId();
-      } while (db[id]);
-      db[id] = parsed.href;
-      await updateDB(config, db);
+    const apiUrl = `https://api.github.com/repos/${username}/${repo}/contents/shorturl.json?ref=${branch}`;
+
+    // Ambil file shorturl.json dari GitHub
+    const data = await fetch(apiUrl, {
+      headers: { Authorization: `token ${token}` },
+    }).then(r => r.json());
+
+    const content = Buffer.from(data.content, "base64").toString();
+    const json = JSON.parse(content);
+
+    // Cek apakah URL sudah disimpan sebelumnya
+    const found = Object.entries(json).find(([, v]) => v === url);
+    const shortId = found ? found[0] : Math.random().toString(36).substring(2, 8);
+    const shortLink = `https://${req.headers.host}/${shortId}`;
+
+    // Jika belum ada, simpan ke GitHub
+    if (!found) {
+      json[shortId] = url;
+
+      await fetch(apiUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: `token ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: `Add short URL: ${shortId}`,
+          content: Buffer.from(JSON.stringify(json, null, 2)).toString("base64"),
+          sha: data.sha,
+          branch,
+        }),
+      });
     }
 
-    const shortLink = `https://${req.headers.host}/${id}`;
-
-    // buat QR code
-    const qrRes = await fetch(
-      `https://api.baguss.xyz/api/tools/text2qr?text=${encodeURIComponent(shortLink)}`
-    );
-    const qrJson = await qrRes.json().catch(() => null);
-    const qrUrl = qrJson?.url || null;
+    // Buat QR via API
+    const qrRes = await fetch(`https://api.baguss.xyz/api/tools/text2qr?text=${encodeURIComponent(shortLink)}`);
+    const qrJson = await qrRes.json();
 
     res.json({
-      success: true,
       short: shortLink,
-      qr: qrUrl
+      qr: qrJson.url,
     });
-  } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
-}
+});
+
+app.listen(3000, () => console.log("✅ Running on port 3000"));
