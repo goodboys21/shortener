@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SniPi - Modern URL Shortener</title>
+    <title>SniPi - URL Shortener</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         /* --- Google Fonts --- */
@@ -443,6 +443,32 @@
             transform: translateY(-3px);
         }
 
+        /* --- Toast Notification --- */
+        #toast-notification {
+            position: fixed;
+            bottom: -100px; /* Mulai dari luar layar */
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #222;
+            color: #fff;
+            padding: 16px 24px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            z-index: 2000;
+            font-size: 1rem;
+            font-weight: 500;
+            opacity: 0;
+            visibility: hidden;
+            transition: bottom 0.5s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.5s ease;
+        }
+
+        #toast-notification.show {
+            bottom: 30px; /* Muncul ke posisi ini */
+            opacity: 1;
+            visibility: visible;
+        }
+
     </style>
 </head>
 <body>
@@ -458,7 +484,7 @@
             <form class="shortener-form" id="shortenerForm">
                 <input type="url" id="longUrlInput" placeholder="you-long-url.com" required>
                 <button type="submit">
-                    <span class="button-text">Go To Snip</span>
+                    <span class="button-text">Shorten Url</span>
                 </button>
             </form>
         </main>
@@ -495,7 +521,7 @@
     <div class="overlay" id="resultOverlay">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Link Generated!</h2>
+                <h2>Generated!</h2>
                 <span class="close-button" id="closeModal">&times;</span>
             </div>
             <div id="qrcode-container"></div>
@@ -513,6 +539,8 @@
         </div>
     </div>
 
+    <div id="toast-notification"></div>
+
     <script>
         // --- Select DOM Elements ---
         const shortenerForm = document.getElementById('shortenerForm');
@@ -525,6 +553,8 @@
         const scrollCards = document.querySelectorAll('.feature-card:not(.initial-reveal)');
         const downloadQrButton = document.getElementById('downloadQrButton');
         const copyLinkButton = document.getElementById('copyLinkButton');
+        const toastNotification = document.getElementById('toast-notification');
+        let toastTimeout; // Untuk menyimpan timer notifikasi
 
         let currentQrCodeUrl = ''; // To store the QR code URL for download
 
@@ -558,13 +588,13 @@
             const longUrl = longUrlInput.value.trim();
 
             if (longUrl === '') {
-                alert('Please enter a valid URL.');
+                showToast('Please enter a valid URL.'); // Menggunakan toast untuk error juga
                 return;
             }
 
             loaderOverlay.classList.add('active');
             
-            const apiUrl = `https://shogood.zone.id/short?url=${encodeURIComponent(longUrl)}`;
+            const apiUrl = `https://snipi.my.id/short?url=${encodeURIComponent(longUrl)}`;
 
             fetch(apiUrl)
                 .then(response => {
@@ -587,10 +617,22 @@
                 })
                 .catch(error => {
                     console.error('Error during API request:', error);
-                    alert('Sorry, something went wrong while shortening the URL. Please check the console (F12) for details.');
+                    showToast('Failed to shorten the URL.'); // Menggunakan toast untuk error
                     loaderOverlay.classList.remove('active');
                 });
         });
+
+        // --- Fungsi untuk menampilkan Toast Notification ---
+        function showToast(message) {
+            clearTimeout(toastTimeout);
+            
+            toastNotification.textContent = message;
+            toastNotification.classList.add('show');
+
+            toastTimeout = setTimeout(() => {
+                toastNotification.classList.remove('show');
+            }, 3000);
+        }
 
         // --- Functions to close the modal ---
         function hideModal() {
@@ -607,28 +649,25 @@
         // --- Copy to clipboard functionality ---
         copyLinkButton.addEventListener('click', function() {
             navigator.clipboard.writeText(shortenedUrlElement.textContent).then(() => {
-                alert(`Copied to clipboard: ${shortenedUrlElement.textContent}`);
+                showToast('Link copied to clipboard!');
             }).catch(err => {
                 console.error('Failed to copy text: ', err);
+                showToast('Failed to copy link.');
             });
         });
 
-        // --- DIUBAH: Fungsi Download QR Code yang Paling Kompatibel ---
+        // --- Fungsi Download QR Code yang Paling Kompatibel ---
         downloadQrButton.addEventListener('click', function() {
             if (!currentQrCodeUrl) {
-                alert('No QR Code available to download.');
+                showToast('No QR Code to download.');
                 return;
             }
 
-            // Membuat elemen link <a> sementara
             const a = document.createElement('a');
             a.href = currentQrCodeUrl;
-            // Menyarankan nama file
             a.download = `qrcode_${shortenedUrlElement.textContent.replace(/[^a-z0-9]/gi, '_')}.png`;
-            // Buka di tab baru jika download otomatis gagal (penting untuk mobile)
             a.target = '_blank'; 
             
-            // Simulasikan klik
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
