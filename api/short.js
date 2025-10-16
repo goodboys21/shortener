@@ -28,7 +28,7 @@ app.get("/short", async (req, res) => {
     // Cek apakah URL sudah disimpan sebelumnya
     const found = Object.entries(json).find(([, v]) => v === url);
     const shortId = found ? found[0] : Math.random().toString(36).substring(2, 8);
-    const shortLink = `https://${req.headers.host}/${shortId}`;
+    const shortLink = `https://snipi.my.id/${shortId}`;
 
     // Jika belum ada, simpan ke GitHub
     if (!found) {
